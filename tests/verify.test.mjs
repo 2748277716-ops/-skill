@@ -76,6 +76,30 @@ test("accepts only authorized long-table differences", () => {
   assert.equal(result.checks.reverseKeysVerified, true);
 });
 
+test("matches formula events by absolute worksheet column outside A1", () => {
+  const source = {
+    ...structuredClone(longSource),
+    dataStartColumn: 2,
+    rows: [structuredClone(longSource.rows[0])],
+  };
+  source.rows[0].values[3] = 999;
+  const aligned = alignLongTable(source, cityContext, {
+    startYear: 2020,
+    endYear: 2020,
+  });
+  aligned.records.find((record) => !record.missing).values[3] = 20;
+  const result = verifyLongAlignment(source, aligned, {
+    cityContext,
+    formulaEvents: [{
+      sheetName: "长表",
+      sourceRow: 2,
+      sourceColumn: 5,
+      currentValue: 20,
+    }],
+  });
+  assert.equal(result.passed, true);
+});
+
 test("detects a long value moved to the wrong city despite equal counts", () => {
   const aligned = alignLongTable(longSource, cityContext, {
     startYear: 2020,

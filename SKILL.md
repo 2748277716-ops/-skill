@@ -38,6 +38,14 @@ description: Use when a city-level Excel/CSV table must be aligned to 城市顺�
 6. 调用确定性运行器。只在返回 `passed` 且正式文件存在、正向和逐键反向核验均通过后报告完成。
 7. 交付独立长表及核验结果；用户自行复制数据列到面板数据。
 
+## 确定性运行器
+
+只把 `.xlsx` 工作簿直接交给运行器。先调用 `codex_app.load_workspace_dependencies`，再把返回的绝对 `node_modules` 路径传给 `node_repl.js_add_node_module_dir`。随后在 `node_repl.js` 中动态导入本 Skill 的绝对 `scripts/run-align.mjs`，调用 `await runAlignment(config)`；不得复制脚本逻辑到临时代码。
+
+配置必须是可序列化对象，至少包含 `inputPath`、`cityOrderPath`、`selectedSheets`、`startYear` 和 `endYear`。`mappingPath` 默认是城市顺序文件同目录的 `城市名称映射表.xlsx`，`outputDir` 默认是源文件目录。所有确认项都要显式写入 `approvedSheetNames`、`approvedExcludedYears` 或 `confirmedMappings`。完整字段、返回值和重跑方式见 [workflow.md](references/workflow.md#运行器配置与调用)。
+
+对结果严格分流：`passed` 才能交付；`paused` 只报告 `code`、最小证据和所需的一个决定；`failed` 报告失败阶段，不得声称已完成。用户确认城市映射后，把原始名、标准名、确认时间、来源文件和来源工作表写入 `confirmedMappings`，从预检开始完整重跑。
+
 ## 不可放宽的规则
 
 - 长表移动完整行，保留全部源列；不得删除省份、代码、英文名等辅助列。

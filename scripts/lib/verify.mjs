@@ -24,7 +24,7 @@ function formulaValue(formulaEvents, sourceModel, row, column, fallback) {
     (item) =>
       (item.sheetName ?? item.sourceSheet) === sourceModel.sheetName &&
       item.sourceRow === row.sourceRow &&
-      item.sourceColumn === column,
+      item.sourceColumn === (sourceModel.dataStartColumn ?? 0) + column,
   );
   return event ? event.currentValue : fallback;
 }

@@ -91,6 +91,50 @@
 
 任何强制核验失败都返回 `failed`，不能降级为警告。
 
+## 运行器配置与调用
+
+`runAlignment(config)` 接受以下 JSON 可序列化字段：
+
+```js
+{
+  inputPath: "C:\\data\\source.xlsx",             // 必填，源工作簿
+  cityOrderPath: "C:\\data\\城市顺序.xlsx",      // 必填，只读
+  mappingPath: "C:\\data\\城市名称映射表.xlsx",  // 可选，默认同目录
+  selectedSheets: ["Sheet1"],                       // 必填；多表必须明确列出
+  cityOrderSheet: "Sheet1",                         // 城市顺序文件多表时必填
+  startYear: 2024,                                   // 必填，整数
+  endYear: 2000,                                     // 必填，整数
+  outputDir: "C:\\data",                           // 可选，默认源文件目录
+  approvedSheetNames: {},                            // 源表名 -> 已批准输出表名
+  approvedExcludedYears: [],                         // 用户明确允许排除的范围外年份
+  confirmedMappings: []                              // 本轮用户明确确认的映射
+}
+```
+
+`confirmedMappings` 每条记录使用：
+
+```js
+{
+  sourceName: "厦冂市",
+  standardName: "厦门市",
+  matchType: "错字确认",
+  confirmedAt: "2026-07-30T12:00:00+08:00",
+  sourceFile: "source.xlsx",
+  sourceSheet: "Sheet1",
+  note: "用户确认"
+}
+```
+
+执行方式：先用 `codex_app.load_workspace_dependencies` 获取 Node 运行时依赖目录，再用 `node_repl.js_add_node_module_dir({ path: 绝对node_modules路径 })` 注册依赖。之后在 `node_repl.js` 中使用新的 `var` 绑定，动态导入绝对 `scripts/run-align.mjs`，调用 `await module.runAlignment(config)`。不要使用静态 import，不要重复声明已有 `const`/`let`，不要从相对 `./node_modules` 路径导入包。
+
+返回对象：
+
+- `passed`：包含 `outputPath`、`outputSha256` 和 `audit`。检查正式文件存在、审计通过、输入哈希未变后才能交付。
+- `paused`：包含 `code`、`message`、`evidence` 和预期输出路径。不得留下正式输出；一次只向用户请求一个决定。
+- `failed`：包含 `code`、`message` 和错误证据。不得交付或声称完成。
+
+城市错字确认后的恢复方式是：把确认记录加入 `confirmedMappings`，保留其他显式配置不变，并重新调用 `runAlignment`。工作表名或范围外年份获得批准时，分别更新 `approvedSheetNames` 或 `approvedExcludedYears` 后同样从头重跑。不要复用上一次内存中的行号、哈希或检测结果。
+
 ## 恢复规则
 
 用户可确认：模糊城市映射、工作表选择、列选择、范围外年份排除。确认内容必须进入显式运行配置和核验记录。用户亲自修正源文件后，应重新计算哈希并从头预检；不得假设先前行号或单元格位置仍有效。

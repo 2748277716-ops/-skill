@@ -145,6 +145,27 @@ function valuesEqual(left, right) {
   return false;
 }
 
+export async function computeFileSha256(filePath) {
+  return sha256(path.resolve(filePath));
+}
+
+export async function listWorkbookStructure(workbookPath) {
+  const absolutePath = path.resolve(workbookPath);
+  try {
+    await fs.access(absolutePath);
+  } catch {
+    pause("SOURCE_NOT_FOUND", "工作簿不存在", { path: absolutePath });
+  }
+  const workbook = await SpreadsheetFile.importXlsx(await FileBlob.load(absolutePath));
+  return {
+    path: absolutePath,
+    sha256: await sha256(absolutePath),
+    sheets: workbook.worksheets.items.map((sheet) => ({
+      name: sheet.name,
+      usedRange: sheet.getUsedRange()?.address ?? null,
+    })),
+  };
+}
 export async function readWorkbookModel(workbookPath, selectedSheets = []) {
   const absolutePath = path.resolve(workbookPath);
   try {
