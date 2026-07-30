@@ -20,6 +20,8 @@
 | `AMBIGUOUS_MULTI_INDICATOR` | 多指标宽表无法可靠拆分 | 候选指标和年份列分组 | 改用单指标或修正表头 |
 | `INVALID_CITY_ORDER` | 城市序号、名称或唯一性异常 | 行号与原始单元格值 | 用户修正城市顺序文件 |
 | `MAPPING_CONFLICT` | 同一原始名对应多个标准名或已有映射冲突 | 冲突记录及行号 | 用户处理映射表 |
+| MAPPING_FILE_OCCUPIED | 长期映射表被占用，无法安全替换 | 路径、系统错误和原文件恢复状态 | 关闭文件后继续 |
+| MAPPING_WRITE_FAILED | 映射表临时写入、替换或最终复核失败 | 阶段、错误和原文件恢复状态 | 停止正式输出并排查 |
 | `UNMATCHED_CITY` | 城市无法可靠匹配 | 原始名、归一化结果、候选及相似依据 | 确认映射或修正源表 |
 | `AMBIGUOUS_CITY_MATCH` | 城市候选不唯一 | 全部候选，不预选答案 | 用户明确确认 |
 | `DUPLICATE_CITY_YEAR` | 存在重复城市—年份键 | 键、源行/单元格及数值 | 用户处理源数据 |
@@ -28,7 +30,7 @@
 | `FORMULA_VALUE_UNAVAILABLE` | 公式没有可用当前计算值 | 工作表、地址、公式 | 用 Excel 计算并保存后重试 |
 | `UNSAFE_MERGED_CELLS` | 合并区域影响记录或年份网格 | 合并区域与受影响列 | 用户拆分或明确处理方案 |
 | `UNSAFE_STRUCTURE` | 复杂对象无法安全保持对应 | 对象类型、区域和风险 | 用户简化源表 |
-| `OUTPUT_FILE_OCCUPIED` | 输出或映射文件被占用 | 路径和系统错误 | 关闭文件后继续 |
+| `OUTPUT_FILE_OCCUPIED` | 正式输出文件已存在或被占用 | 路径和系统错误 | 关闭文件或确认新的输出时间戳后继续 |
 | INVALID_SHEET_NAME | 输出工作表名称无效、过长或重复 | 原名称和限制 | 提供明确的安全名称 |
 | OUTPUT_WRITE_FAILED | 临时输出写入或重导入核验失败 | 路径和错误阶段 | 停止交付并排查 |
 | `MAPPING_APPEND_REQUIRES_CONFIRMATION` | 模糊映射尚未确认 | 原始名、目标标准名、证据 | 明确确认或拒绝 |
