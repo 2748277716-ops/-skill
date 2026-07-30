@@ -1,0 +1,9 @@
+node_modules/
+work/
+tests/tmp/
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.tmp
+*.log
