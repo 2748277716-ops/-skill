@@ -1,0 +1,4 @@
+interface:
+  display_name: "城市面板数据对齐"
+  short_description: "安全对齐城市与年份顺序，保留辅助列并生成可核验独立长表结果"
+  default_prompt: "将城市长表或宽表按城市顺序和目标年份安全对齐，遇到歧义时暂停。"
