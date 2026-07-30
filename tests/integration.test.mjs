@@ -73,6 +73,8 @@ test("does not create formal output when a typo needs confirmation", async () =>
 
 test("resumes after explicit confirmation and appends mapping", async () => {
   const paths = await makeFixture("confirmed-typo");
+  const sourceBefore = await fs.readFile(paths.inputPath);
+  const cityOrderBefore = await fs.readFile(paths.cityOrderPath);
   const result = await runAlignment({
     ...baseConfig(paths),
     confirmedMappings: [{
@@ -87,6 +89,8 @@ test("resumes after explicit confirmation and appends mapping", async () => {
   }, runtime);
   assert.equal(result.status, "passed");
   assert.equal(await fs.access(result.outputPath).then(() => true, () => false), true);
+  assert.deepEqual(await fs.readFile(paths.inputPath), sourceBefore);
+  assert.deepEqual(await fs.readFile(paths.cityOrderPath), cityOrderBefore);
   const mappings = await readMappingRows(paths.mappingPath);
   assert.equal(mappings.length, 1);
   assert.equal(mappings[0].标准城市名, "厦门市");

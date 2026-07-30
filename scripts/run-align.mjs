@@ -423,6 +423,10 @@ async function main() {
   if (result.status === "failed") process.exitCode = 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+const runtimeProcess = globalThis.process;
+if (
+  runtimeProcess?.argv?.[1] &&
+  import.meta.url === pathToFileURL(runtimeProcess.argv[1]).href
+) {
   await main();
 }
