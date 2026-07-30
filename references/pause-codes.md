@@ -29,6 +29,8 @@
 | `UNSAFE_MERGED_CELLS` | 合并区域影响记录或年份网格 | 合并区域与受影响列 | 用户拆分或明确处理方案 |
 | `UNSAFE_STRUCTURE` | 复杂对象无法安全保持对应 | 对象类型、区域和风险 | 用户简化源表 |
 | `OUTPUT_FILE_OCCUPIED` | 输出或映射文件被占用 | 路径和系统错误 | 关闭文件后继续 |
+| INVALID_SHEET_NAME | 输出工作表名称无效、过长或重复 | 原名称和限制 | 提供明确的安全名称 |
+| OUTPUT_WRITE_FAILED | 临时输出写入或重导入核验失败 | 路径和错误阶段 | 停止交付并排查 |
 | `MAPPING_APPEND_REQUIRES_CONFIRMATION` | 模糊映射尚未确认 | 原始名、目标标准名、证据 | 明确确认或拒绝 |
 | `REVERSE_VERIFICATION_FAILED` | 逐键反向核验失败 | 缺失、多余或内容不一致的键 | 停止交付并排查 |
 | `SOURCE_HASH_CHANGED` | 执行期间输入文件发生变化 | 前后哈希 | 关闭占用并重新开始 |

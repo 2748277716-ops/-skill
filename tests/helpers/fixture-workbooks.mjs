@@ -15,7 +15,7 @@ const OFFICE_REL_NS =
 const tempDirectory = fileURLToPath(new URL("../tmp/", import.meta.url));
 const capabilityPath = path.join(tempDirectory, "capability.xlsx");
 
-async function addNormalHyperlink(workbookPath, target) {
+async function addNormalHyperlink(workbookPath, target, cellAddress = "C2") {
   const zip = await JSZip.loadAsync(await fs.readFile(workbookPath));
   const sheetPath = "xl/worksheets/sheet1.xml";
   const relsPath = "xl/worksheets/_rels/sheet1.xml.rels";
@@ -28,7 +28,7 @@ async function addNormalHyperlink(workbookPath, target) {
     throw new Error("Capability hyperlink relationship already exists");
   }
   const hyperlinkXml =
-    `<x:hyperlinks><x:hyperlink ref="C2" r:id="${relationshipId}" ` +
+    `<x:hyperlinks><x:hyperlink ref="${cellAddress}" r:id="${relationshipId}" ` +
     `xmlns:r="${OFFICE_REL_NS}" /></x:hyperlinks>`;
   if (!sheetXml.includes("</x:sheetData>")) {
     throw new Error("Unsupported worksheet XML: missing sheetData boundary");
@@ -119,4 +119,60 @@ export async function inspectCapabilityRoundTrip(workbookPath) {
     comment: threads.find((thread) => thread.target === "A2")?.text ?? null,
     hyperlinkTarget: await inspectNormalHyperlink(workbookPath),
   };
+}
+
+const workbookIoFixturePromises = new Map();
+
+async function createWorkbookIoFixture(workbookPath, { formulaError = false, mergeInside = false } = {}) {
+  await fs.rm(workbookPath, { force: true });
+  const workbook = Workbook.create();
+  const data = workbook.worksheets.add("Data");
+  const notes = workbook.worksheets.add("Notes");
+  data.getRange("A1:E3").values = [
+    ["城市", "年份", "值", "计算值", "链接"],
+    ["厦门市", 2021, 10, null, "Example"],
+    ["北京市", 2020, 5, null, null],
+  ];
+  data.getRange("D2").formulas = [[formulaError ? "=1/0" : "=C2*2"]];
+  data.getRange("C2").format = {
+    numberFormat: "0.00",
+    fill: "#FFFF00",
+    font: { bold: true, color: "#FF0000" },
+    borders: { preset: "all", style: "thin", color: "#00FF00" },
+  };
+  workbook.comments.setSelf({ displayName: "fixture" });
+  workbook.comments.addThread(
+    { cell: data.getRange("C2") },
+    "fixture-comment",
+  );
+  data.getRange("H1:I1").merge();
+  data.getRange("H1").values = [["outside-note"]];
+  if (mergeInside) data.getRange("A2:B2").merge();
+  notes.getRange("A1:B2").values = [
+    ["说明", "不处理"],
+    ["仅用于工作表列表", true],
+  ];
+
+  const exported = await SpreadsheetFile.exportXlsx(workbook);
+  await exported.save(workbookPath);
+  await addNormalHyperlink(workbookPath, "https://example.com/", "E2");
+}
+
+export function createWorkbookIoFixtures(outputDirectory) {
+  const cacheKey = path.resolve(outputDirectory);
+  if (!workbookIoFixturePromises.has(cacheKey)) {
+    workbookIoFixturePromises.set(cacheKey, (async () => {
+      await fs.mkdir(outputDirectory, { recursive: true });
+      const paths = {
+        normalPath: path.join(outputDirectory, "workbook-io-normal.xlsx"),
+        errorPath: path.join(outputDirectory, "workbook-io-error.xlsx"),
+        mergedPath: path.join(outputDirectory, "workbook-io-merged.xlsx"),
+      };
+      await createWorkbookIoFixture(paths.normalPath);
+      await createWorkbookIoFixture(paths.errorPath, { formulaError: true });
+      await createWorkbookIoFixture(paths.mergedPath, { mergeInside: true });
+      return paths;
+    })());
+  }
+  return workbookIoFixturePromises.get(cacheKey);
 }
