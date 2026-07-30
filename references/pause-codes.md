@@ -16,6 +16,7 @@
 | `AMBIGUOUS_CITY_COLUMN` | 城市列不唯一 | 候选列、表头和样例 | 指定城市列 |
 | `AMBIGUOUS_YEAR_COLUMN` | 年份列不唯一或无法解析 | 候选列、异常值 | 指定年份列或修正源表 |
 | `AMBIGUOUS_TABLE_MODEL` | 长表/宽表判断不唯一 | 两种判断依据 | 指定表型或修正表头 |
+| UNRECOGNIZED_TABLE | 无法可靠识别数据结构 | 表头、候选列和使用区域摘要 | 指定结构或修正表头 |
 | `AMBIGUOUS_INDICATORS` | 多指标宽表无法可靠拆分 | 候选指标和年份列分组 | 改用单指标或修正表头 |
 | `INVALID_CITY_ORDER` | 城市序号、名称或唯一性异常 | 行号与原始单元格值 | 用户修正城市顺序文件 |
 | `MAPPING_CONFLICT` | 同一原始名对应多个标准名或已有映射冲突 | 冲突记录及行号 | 用户处理映射表 |
