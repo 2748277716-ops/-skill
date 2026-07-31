@@ -4,11 +4,41 @@ function pause(code, message, evidence = {}) {
   throw new PauseError(code, message, evidence);
 }
 
-function targetYears(config) {
+function sourceYears(model) {
+  const years = [...new Set(model.rows.map(
+    (row) => Number(row.year ?? row.values?.[model.yearColumn]),
+  ))];
+  if (!years.length || years.some((year) => !Number.isInteger(year))) {
+    pause("AMBIGUOUS_YEAR_COLUMN", "无法从源表可靠提取全部年份", {
+      sheetName: model.sheetName,
+      years,
+    });
+  }
+  return years.sort((left, right) => right - left);
+}
+
+function targetYears(config, model) {
+  if (Array.isArray(config?.targetYears) && config.targetYears.length) {
+    const years = [...new Set(config.targetYears.map(Number))];
+    if (years.some((year) => !Number.isInteger(year))) {
+      pause("UNSAFE_STRUCTURE", "目标年份集合包含非整数", {
+        targetYears: config.targetYears,
+      });
+    }
+    years.sort((left, right) => right - left);
+    return { years, yearSet: new Set(years) };
+  }
+
+  const hasStart = config?.startYear !== null && config?.startYear !== undefined;
+  const hasEnd = config?.endYear !== null && config?.endYear !== undefined;
+  if (!hasStart && !hasEnd) {
+    const years = sourceYears(model);
+    return { years, yearSet: new Set(years) };
+  }
   const first = Number(config?.startYear);
   const second = Number(config?.endYear);
   if (!Number.isInteger(first) || !Number.isInteger(second)) {
-    pause("UNSAFE_STRUCTURE", "目标年份范围无效", {
+    pause("UNSAFE_STRUCTURE", "年份范围必须同时提供两个整数；均未提供时自动使用源文件全部年份", {
       startYear: config?.startYear,
       endYear: config?.endYear,
     });
@@ -17,7 +47,7 @@ function targetYears(config) {
   const maximum = Math.max(first, second);
   const years = [];
   for (let year = maximum; year >= minimum; year -= 1) years.push(year);
-  return { minimum, maximum, years };
+  return { years, yearSet: new Set(years) };
 }
 
 function cityYearKey(city, year) {
@@ -58,12 +88,56 @@ function validateModel(model, cityContext) {
   }
 }
 
+function normalizedHeader(value) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .replace(/[\s\u00a0\u3000]+/gu, "")
+    .toLowerCase();
+}
+
+function selectedSourceColumns(model, config) {
+  if (config?.outputMode !== "selected_indicators") {
+    return model.headers.map((_, column) => column);
+  }
+  const requested = Array.isArray(config.selectedIndicators)
+    ? config.selectedIndicators.map((item) => String(item ?? "").trim()).filter(Boolean)
+    : [];
+  if (!requested.length) {
+    pause("INDICATOR_SELECTION_REQUIRED", "精简指标模式必须明确指定至少一个指标", {
+      headers: model.headers,
+    });
+  }
+  const columns = [model.cityColumn, model.yearColumn];
+  for (const indicator of requested) {
+    const key = normalizedHeader(indicator);
+    const matches = model.headers.flatMap((header, column) =>
+      normalizedHeader(header) === key ? [{ header, column }] : [],
+    );
+    if (matches.length === 0) {
+      pause("INDICATOR_NOT_FOUND", "指定指标在源表中不存在", {
+        indicator,
+        headers: model.headers,
+      });
+    }
+    if (matches.length > 1) {
+      pause("AMBIGUOUS_INDICATOR", "指定指标对应多个源列，不能自动选择", {
+        indicator,
+        matches,
+      });
+    }
+    if (!columns.includes(matches[0].column)) columns.push(matches[0].column);
+  }
+  return columns;
+}
+
 export function alignLongTable(model, cityContext, config = {}) {
   validateModel(model, cityContext);
-  const yearContext = targetYears(config);
+  const yearContext = targetYears(config, model);
   const sourceByKey = new Map();
   const outOfRangeRows = [];
   const mappingEvents = [];
+  const outsideOrderEntries = [];
+  const outsideOrderNames = new Set();
 
   for (const row of model.rows) {
     if (!Array.isArray(row.values) || row.values.length !== model.headers.length) {
@@ -75,11 +149,28 @@ export function alignLongTable(model, cityContext, config = {}) {
       });
     }
     const standardName = row.cityMatch?.standardName;
-    if (!standardName || !cityContext.rankByName.has(standardName)) {
-      pause("UNMATCHED_CITY", "源行缺少已确认的标准城市名", {
+    if (!standardName) {
+      pause("UNMATCHED_CITY", "源行缺少可用城市名", {
         sheetName: model.sheetName,
         sourceRow: row.sourceRow,
         rawCity: row.values[model.cityColumn],
+      });
+    }
+    if (!cityContext.rankByName.has(standardName) && !outsideOrderNames.has(standardName)) {
+      if (config.allowOutsideOrderCities === false) {
+        pause("UNMATCHED_CITY", "源城市不在城市顺序表中，且配置禁止自动追加", {
+          sheetName: model.sheetName,
+          sourceRow: row.sourceRow,
+          rawCity: row.values[model.cityColumn],
+        });
+      }
+      outsideOrderNames.add(standardName);
+      outsideOrderEntries.push({
+        sequence: cityContext.entries.length + outsideOrderEntries.length + 1,
+        standardName,
+        sourceRow: row.sourceRow,
+        rank: cityContext.entries.length + outsideOrderEntries.length,
+        outsideOrder: true,
       });
     }
     const year = Number(row.year ?? row.values[model.yearColumn]);
@@ -102,7 +193,7 @@ export function alignLongTable(model, cityContext, config = {}) {
 
     const sourceRecord = { ...row, standardName, year };
     sourceByKey.set(key, sourceRecord);
-    if (year < yearContext.minimum || year > yearContext.maximum) {
+    if (!yearContext.yearSet.has(year)) {
       outOfRangeRows.push({
         ...sourceRecord,
         values: [...row.values],
@@ -129,7 +220,8 @@ export function alignLongTable(model, cityContext, config = {}) {
 
   const records = [];
   const missingKeys = [];
-  for (const city of cityContext.entries) {
+  const effectiveCityEntries = [...cityContext.entries, ...outsideOrderEntries];
+  for (const city of effectiveCityEntries) {
     for (const year of yearContext.years) {
       const existing = sourceByKey.get(cityYearKey(city.standardName, year));
       if (existing) {
@@ -179,18 +271,34 @@ export function alignLongTable(model, cityContext, config = {}) {
     });
   }
 
+  const sourceColumns = selectedSourceColumns(model, config);
+  const projectedRecords = records.map((record) => ({
+    ...record,
+    values: sourceColumns.map((column) => record.values[column]),
+    cellMetadata: Array.isArray(record.cellMetadata)
+      ? sourceColumns.map((column) => cloneMetadata(record.cellMetadata[column]))
+      : record.cellMetadata,
+    sourceCells: Array.isArray(record.sourceCells)
+      ? sourceColumns.map((column) => record.sourceCells[column])
+      : record.sourceCells,
+  }));
+
   return {
     kind: "long-aligned",
     sheetName: model.sheetName,
-    headers: [...model.headers],
-    rows: records.map((record) => record.values),
-    records,
-    cityColumn: model.cityColumn,
-    yearColumn: model.yearColumn,
+    headers: sourceColumns.map((column) => model.headers[column]),
+    rows: projectedRecords.map((record) => record.values),
+    records: projectedRecords,
+    cityColumn: sourceColumns.indexOf(model.cityColumn),
+    yearColumn: sourceColumns.indexOf(model.yearColumn),
+    sourceColumns,
+    outputMode: config.outputMode ?? "preserve_rows",
     targetYears: yearContext.years,
     missingKeys,
     outOfRangeRows,
     mappingEvents,
+    outsideOrderCities: outsideOrderEntries.map((entry) => entry.standardName),
+    cityEntries: effectiveCityEntries,
     sourceRecordCount: model.rows.length,
     inRangeSourceRecordCount: inRangeSourceCount,
   };

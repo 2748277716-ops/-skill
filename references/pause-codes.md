@@ -1,51 +1,21 @@
-# 暂停代码
+# V2 暂停代码
 
-运行器返回：
+- `INVALID_CONFIG`：路径、模式或年份配置不完整。
+- `MULTIPLE_SHEETS`：源文件或城市顺序文件存在多个候选工作表。
+- `INVALID_CITY_ORDER`：固定城市顺序表表头、序号或城市名不合法。
+- `AMBIGUOUS_CITY_COLUMN`：存在多个可能的城市列。
+- `AMBIGUOUS_YEAR_COLUMN`：年份列或年份值不能唯一可靠识别。
+- `INDICATOR_SELECTION_REQUIRED`：精简模式没有指定指标。
+- `INDICATOR_NOT_FOUND`：指定指标表头不存在。
+- `AMBIGUOUS_INDICATOR`：指定指标对应多个同名列。
+- `INDICATOR_SELECTION_UNSUPPORTED`：当前宽表结构不能按列安全提取指标。
+- `DUPLICATE_CITY_YEAR`：存在重复城市—年份键。
+- `UNSAFE_MERGED_CELLS`：合并单元格与数据区域相交。
+- `FORMULA_ERROR`：公式当前值为错误。
+- `FORMULA_VALUE_UNAVAILABLE`：公式没有可用当前计算值。
+- `OUTPUT_FILE_OCCUPIED`：目标输出已存在或被占用。
+- `SOURCE_HASH_CHANGED`：运行期间输入发生变化。
+- `REVERSE_VERIFICATION_FAILED`：输出不能逐键追溯到源数据。
+- `OUTPUT_WRITE_FAILED`：临时写出、重新导入或正式复制失败。
 
-```js
-{ status: "paused", code, message, evidence }
-```
-
-`evidence` 必须是可核对的最小证据，不得只给笼统错误。除用户确认后可恢复的事项外，不得把暂停自动转成通过。
-
-| 代码 | 含义 | 必须提供的证据 | 用户动作 |
-|---|---|---|---|
-| `SOURCE_NOT_FOUND` | 源文件不存在 | 解析后的绝对路径 | 提供正确路径 |
-| `CITY_ORDER_NOT_FOUND` | 城市顺序文件不存在 | 解析后的绝对路径 | 提供正确路径 |
-| `MULTIPLE_SHEETS` | 存在多个候选工作表 | 工作表名和使用区域摘要 | 选择工作表 |
-| `AMBIGUOUS_CITY_COLUMN` | 城市列不唯一 | 候选列、表头和样例 | 指定城市列 |
-| `AMBIGUOUS_YEAR_COLUMN` | 年份列不唯一或无法解析 | 候选列、异常值 | 指定年份列或修正源表 |
-| `AMBIGUOUS_TABLE_MODEL` | 长表/宽表判断不唯一 | 两种判断依据 | 指定表型或修正表头 |
-| UNRECOGNIZED_TABLE | 无法可靠识别数据结构 | 表头、候选列和使用区域摘要 | 指定结构或修正表头 |
-| `AMBIGUOUS_MULTI_INDICATOR` | 多指标宽表无法可靠拆分 | 候选指标和年份列分组 | 改用单指标或修正表头 |
-| `INVALID_CITY_ORDER` | 城市序号、名称或唯一性异常 | 行号与原始单元格值 | 用户修正城市顺序文件 |
-| `MAPPING_CONFLICT` | 同一原始名对应多个标准名或已有映射冲突 | 冲突记录及行号 | 用户处理映射表 |
-| MAPPING_FILE_OCCUPIED | 长期映射表被占用，无法安全替换 | 路径、系统错误和原文件恢复状态 | 关闭文件后继续 |
-| MAPPING_WRITE_FAILED | 映射表临时写入、替换或最终复核失败 | 阶段、错误和原文件恢复状态 | 停止正式输出并排查 |
-| `UNMATCHED_CITY` | 城市无法可靠匹配 | 原始名、归一化结果、候选及相似依据 | 确认映射或修正源表 |
-| `AMBIGUOUS_CITY_MATCH` | 城市候选不唯一 | 全部候选，不预选答案 | 用户明确确认 |
-| `DUPLICATE_CITY_YEAR` | 存在重复城市—年份键 | 键、源行/单元格及数值 | 用户处理源数据 |
-| `OUT_OF_RANGE_YEARS` | 存在目标范围外年份 | 年份、数量和位置 | 允许排除或处理源表 |
-| `FORMULA_ERROR` | 公式错误 | 工作表、地址、公式、错误值 | 用户处理公式 |
-| `FORMULA_VALUE_UNAVAILABLE` | 公式没有可用当前计算值 | 工作表、地址、公式 | 用 Excel 计算并保存后重试 |
-| `UNSAFE_MERGED_CELLS` | 合并区域影响记录或年份网格 | 合并区域与受影响列 | 用户拆分或明确处理方案 |
-| `UNSAFE_STRUCTURE` | 复杂对象无法安全保持对应 | 对象类型、区域和风险 | 用户简化源表 |
-| `OUTPUT_FILE_OCCUPIED` | 正式输出文件已存在或被占用 | 路径和系统错误 | 关闭文件或确认新的输出时间戳后继续 |
-| INVALID_SHEET_NAME | 输出工作表名称无效、过长或重复 | 原名称和限制 | 提供明确的安全名称 |
-| OUTPUT_WRITE_FAILED | 临时输出写入或重导入核验失败 | 路径和错误阶段 | 停止交付并排查 |
-| `MAPPING_APPEND_REQUIRES_CONFIRMATION` | 模糊映射尚未确认 | 原始名、目标标准名、证据 | 明确确认或拒绝 |
-| `REVERSE_VERIFICATION_FAILED` | 逐键反向核验失败 | 缺失、多余或内容不一致的键 | 停止交付并排查 |
-| `SOURCE_HASH_CHANGED` | 执行期间输入文件发生变化 | 前后哈希 | 关闭占用并重新开始 |
-
-## 证据格式
-
-- 单元格使用 `工作表!A1`。
-- 行号同时给出工作表可见行号和内部零基索引（如需要）。
-- 城市匹配证据保留原始字符串，不要只给归一化结果。
-- 重复键列出全部来源位置；即使值相同也不自动去重。
-- 公式证据不得只给计算值，必须同时保留公式文本。
-- 占用错误不得通过另存临时正式文件绕过。
-
-## 对话规则
-
-一次只向用户请求一个决定。对于 `UNMATCHED_CITY` 或 `AMBIGUOUS_CITY_MATCH`，先说明可靠匹配为何失败，再给候选；用户确认后才可把记录追加到 `城市名称映射表.xlsx`。用户拒绝或无法确认时保持暂停。
+范围外城市不是暂停条件：非空城市默认按源文件首次出现顺序追加。空城市名仍属于无法安全处理的数据问题。
