@@ -176,3 +176,52 @@ export function createWorkbookIoFixtures(outputDirectory) {
   }
   return workbookIoFixturePromises.get(cacheKey);
 }
+export async function addOrphanWorksheetRelationship(
+  sourcePath,
+  outputPath,
+  {
+    id = "rIdOrphan",
+    target = "worksheets/missing-orphan.xml",
+  } = {},
+) {
+  const zip = await JSZip.loadAsync(await fs.readFile(sourcePath));
+  const relsPath = "xl/_rels/workbook.xml.rels";
+  const relsFile = zip.file(relsPath);
+  if (!relsFile) throw new Error(`Missing OOXML part: ${relsPath}`);
+  let relsXml = await relsFile.async("string");
+  if (relsXml.includes(`Id="${id}"`)) {
+    throw new Error(`Relationship already exists: ${id}`);
+  }
+  const relationshipXml =
+    `<Relationship Id="${id}" ` +
+    `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" ` +
+    `Target="${target}"/>`;
+  if (!relsXml.includes("</Relationships>")) {
+    throw new Error("Unsupported workbook relationship XML");
+  }
+  relsXml = relsXml.replace(
+    "</Relationships>",
+    `${relationshipXml}</Relationships>`,
+  );
+  zip.file(relsPath, relsXml);
+  await fs.writeFile(
+    outputPath,
+    await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }),
+  );
+  return outputPath;
+}
+
+export async function removeReferencedWorksheetPart(
+  sourcePath,
+  outputPath,
+  partPath = "xl/worksheets/sheet1.xml",
+) {
+  const zip = await JSZip.loadAsync(await fs.readFile(sourcePath));
+  if (!zip.file(partPath)) throw new Error(`Missing OOXML part: ${partPath}`);
+  zip.remove(partPath);
+  await fs.writeFile(
+    outputPath,
+    await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }),
+  );
+  return outputPath;
+}
