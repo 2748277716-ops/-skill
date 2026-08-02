@@ -1,5 +1,6 @@
 import { resolveCityName } from "./cities.mjs";
 import { PauseError } from "./pause.mjs";
+import { parseYear } from "./years.mjs";
 
 function pause(code, message, evidence = {}) {
   throw new PauseError(code, message, evidence);
@@ -7,14 +8,6 @@ function pause(code, message, evidence = {}) {
 
 function isBlank(value) {
   return value === null || value === undefined || String(value).trim() === "";
-}
-
-function parseYear(value) {
-  if (typeof value === "number" && Number.isInteger(value)) {
-    return value >= 1000 && value <= 9999 ? value : null;
-  }
-  const text = String(value ?? "").trim();
-  return /^\d{4}$/u.test(text) ? Number(text) : null;
 }
 
 function targetYearContext(config) {

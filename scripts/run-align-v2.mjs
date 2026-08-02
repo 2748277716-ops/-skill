@@ -13,6 +13,7 @@ import { detectTableModel } from "./lib/detect-v2.mjs";
 import { PauseError } from "./lib/pause.mjs";
 import { recommendProcessingModes } from "./lib/recommendation.mjs";
 import { verifyLongAlignment, verifyWideAlignment } from "./lib/verify-v2.mjs";
+import { parseYear } from "./lib/years.mjs";
 import {
   computeFileSha256,
   listWorkbookStructure,
@@ -54,14 +55,6 @@ function cityOrderRows(sheetModel) {
 
 function normalizedHeader(value) {
   return String(value ?? "").normalize("NFKC").replace(/[\s\u00a0\u3000]+/gu, "").toLowerCase();
-}
-
-function parseYear(value) {
-  if (typeof value === "number" && Number.isInteger(value)) {
-    return value >= 1000 && value <= 9999 ? value : null;
-  }
-  const text = String(value ?? "").trim();
-  return /^\d{4}$/u.test(text) ? Number(text) : null;
 }
 
 function inferSourceYears(matrix) {

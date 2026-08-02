@@ -106,6 +106,22 @@ async function removeFormulaCachedValue(sourcePath, outputPath, cellAddress = "G
   return outputPath;
 }
 
+async function prependSelfClosingBlankCell(sourcePath, outputPath) {
+  const zip = await JSZip.loadAsync(await fs.readFile(sourcePath));
+  const partPath = "xl/worksheets/sheet1.xml";
+  const part = zip.file(partPath);
+  if (!part) throw new Error(`Missing worksheet part: ${partPath}`);
+  const xml = await part.async("string");
+  const rowStart = /(<(?:[\w.-]+:)?row\b[^>]*\br="1"[^>]*>)/i;
+  if (!rowStart.test(xml)) throw new Error("Missing first worksheet row");
+  zip.file(partPath, xml.replace(rowStart, '$1<c r="A1" s="0"/>'));
+  await fs.writeFile(
+    outputPath,
+    await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }),
+  );
+  return outputPath;
+}
+
 test("typed worksheet values and cached formula results are decoded", async () => {
   const workbookPath = path.join(testDirectory, "typed-values.xlsx");
   await createTypedWorkbook(workbookPath);
@@ -130,6 +146,30 @@ test("typed worksheet values and cached formula results are decoded", async () =
   assert.equal(sheet.matrix[1][5].toISOString(), "2021-01-02T00:00:00.000Z");
   assert.equal(sheet.matrix[1][6], 25);
   assert.equal(sheet.formulaEvents[0].cell, "G2");
+});
+
+test("self-closing blank cell does not steal the following shared-string cell", async () => {
+  const basePath = path.join(testDirectory, "sparse-header-base.xlsx");
+  const sparsePath = path.join(testDirectory, "sparse-header.xlsx");
+  await fs.rm(basePath, { force: true });
+  await fs.rm(sparsePath, { force: true });
+  const workbook = Workbook.create();
+  const sheet = workbook.worksheets.add("SparseHeader");
+  sheet.getRange("B1:C2").values = [
+    ["城市", "值"],
+    ["厦门市", 1],
+  ];
+  const exported = await SpreadsheetFile.exportXlsx(workbook);
+  await exported.save(basePath);
+  await prependSelfClosingBlankCell(basePath, sparsePath);
+
+  const parsed = await readWorksheetTable(sparsePath, "SparseHeader");
+
+  assert.deepEqual(parsed.matrix[0], [null, "城市", "值"]);
+  assert.deepEqual(
+    parsed.headerMetadata.map((item) => item.address),
+    ["A1", "B1", "C1"],
+  );
 });
 
 test("formula errors and missing cached values pause reading", async () => {

@@ -49,6 +49,19 @@ test("detects a wide table from numeric and trimmed-text year headers", () => {
   assert.deepEqual(model.auxiliaryColumns, [0, 1, 2]);
 });
 
+test("detects a wide table from date-formatted year header values", () => {
+  const matrix = [
+    ["城市", new Date("2020-12-01T00:00:00Z"), new Date("2021-12-01T00:00:00Z")],
+    ["厦门市", 100, 120],
+  ];
+  const model = detectTableModel(matrix, baseConfig, cityContext);
+  assert.equal(model.kind, "wide");
+  assert.deepEqual(model.yearColumns, [
+    { year: 2020, column: 1 },
+    { year: 2021, column: 2 },
+  ]);
+});
+
 test("two city-like columns pause instead of guessing", () => {
   const matrix = [
     ["城市", "城市名称", "年份", "值"],

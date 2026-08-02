@@ -437,7 +437,7 @@ function parseWorksheetCells(sheetXml, context) {
     const rowIndex = Number.isInteger(rowNumber) ? rowNumber - 1 : rows.size;
     const cells = new Map();
     const cellExpression =
-      /<(?:[\w.-]+:)?c\b([^>]*)>([\s\S]*?)<\/(?:[\w.-]+:)?c>/gi;
+      /<(?:[\w.-]+:)?c\b([^>]*?)(?:\/\s*>|>([\s\S]*?)<\/(?:[\w.-]+:)?c>)/gi;
     for (const cellMatch of rowMatch[2].matchAll(cellExpression)) {
       const attributes = parseXmlAttributes(cellMatch[1]);
       const parsedReference = parseCellReference(attributes.r);
@@ -446,7 +446,7 @@ function parseWorksheetCells(sheetXml, context) {
       const address = attributes.r ?? (columnLabel(column) + String(row + 1));
       cells.set(column, decodeCellValue({
         attributes,
-        body: cellMatch[2],
+        body: cellMatch[2] ?? "",
         address,
         column,
         row,

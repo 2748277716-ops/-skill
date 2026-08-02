@@ -1,6 +1,7 @@
 import { resolveCityName } from "./cities.mjs";
 import { detectTableModel as detectTableModelLegacy } from "./detect.mjs";
 import { PauseError } from "./pause.mjs";
+import { parseYear } from "./years.mjs";
 
 function pause(code, message, evidence = {}) {
   throw new PauseError(code, message, evidence);
@@ -8,14 +9,6 @@ function pause(code, message, evidence = {}) {
 
 function normalizedHeader(value) {
   return String(value ?? "").normalize("NFKC").replace(/[\s\u00a0\u3000]+/gu, "").toLowerCase();
-}
-
-function parseYear(value) {
-  if (typeof value === "number" && Number.isInteger(value)) {
-    return value >= 1000 && value <= 9999 ? value : null;
-  }
-  const text = String(value ?? "").trim();
-  return /^\d{4}$/u.test(text) ? Number(text) : null;
 }
 
 function isBlank(value) {
