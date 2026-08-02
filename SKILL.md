@@ -11,6 +11,8 @@ description: Use when a city-level Excel/CSV table must be aligned to 城市顺�
 
 - 使用 `spreadsheets:Spreadsheets` 处理独立表格文件。
 - 开始前调用 `codex_app.load_workspace_dependencies`，只使用返回的 Node.js、`@oai/artifact-tool` 和已捆绑依赖；缺少依赖时先询问用户，不擅自安装。
+- 输入预检与读取使用已捆绑 jszip 完成 OOXML 定向读取；不要求先生成修复版或规范化临时源文件。
+- artifact-tool 仅用于结果写出和复核，不用于源工作簿的完整导入。
 - 调用确定性运行器 [run-align-v2.mjs](scripts/run-align-v2.mjs)，不要在对话中临时重写排序逻辑。
 - 未单独取得许可，不启动 Excel、LibreOffice、PDF/PNG 渲染、浏览器预览或外部转换器。
 
@@ -54,6 +56,16 @@ const recommendations = await estimateAlignmentModes(config);
 - 用户明确给出年份范围时，按该范围生成降序年份集合。
 - 先按 `城市顺序.xlsx` 的固定顺序排列。
 - 源文件中不在城市顺序表内的非空城市，按其在源文件首次出现顺序追加在最后。
+## OOXML 输入兼容边界
+
+- 预检只读取包结构、工作表关系、使用区域和行列统计，不导入全部单元格。
+- 只校验 workbook.xml 中工作表实际使用的关系；未被引用且目标缺失的孤立关系只记录，不阻断处理。
+- 实际引用部件缺失时以 INVALID_WORKBOOK_PACKAGE 暂停，并报告关系 ID、目标与解析后的部件路径。
+- 精简模式只物化城市列、年份列和用户指定指标列；完整行模式才物化目标数据区的全部源列。
+- 共享字符串、内联字符串、数值、布尔值和带样式日期保持类型；公式只使用 OOXML 中已有缓存值。
+- 公式错误、公式无缓存值或物化数据区域存在合并单元格时暂停。
+- 不修改或修复源文件，不删除孤立关系，不输出临时“修复版源文件”。
+
 - 不修改、扩展或派生 `城市顺序.xlsx`；不得生成派生顺序表。
 - 空城市名、重复城市—年份键、城市列或年份列歧义、指标列歧义、公式错误、数据区域合并单元格等情况暂停正式输出。
 - 不填充、不插值、不复制相邻值。缺失城市—年份只保留城市和年份，指标保持真正空白。

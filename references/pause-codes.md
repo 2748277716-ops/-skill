@@ -1,6 +1,7 @@
 # V2 暂停代码
 
 - `INVALID_CONFIG`：路径、模式或年份配置不完整。
+- INVALID_WORKBOOK_PACKAGE：OOXML 必需部件、实际引用关系或实际引用工作表缺失；证据包含关系 ID、目标和解析后的部件路径。未引用的孤立关系不属于此错误。
 - `MULTIPLE_SHEETS`：源文件或城市顺序文件存在多个候选工作表。
 - `INVALID_CITY_ORDER`：固定城市顺序表表头、序号或城市名不合法。
 - `AMBIGUOUS_CITY_COLUMN`：存在多个可能的城市列。

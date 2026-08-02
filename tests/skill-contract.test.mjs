@@ -15,6 +15,12 @@ test("SKILL.md exposes required metadata and safety text", () => {
     "宽表",
     "暂停正式输出",
     "最少操作",
+    "OOXML 定向读取",
+    "孤立关系",
+    "实际引用部件缺失",
+    "INVALID_WORKBOOK_PACKAGE",
+    "精简模式只物化",
+    "artifact-tool 仅用于结果写出和复核",
     "逐键反向核验",
   ]) {
     assert.ok(text.includes(phrase), `Missing phrase: ${phrase}`);
