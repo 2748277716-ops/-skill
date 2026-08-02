@@ -10,21 +10,15 @@ import {
   validateMappingRows,
 } from "./lib/cities.mjs";
 import { detectTableModel } from "./lib/detect-v2.mjs";
-import { readMappingRows } from "./lib/mapping-store.mjs";
 import { PauseError } from "./lib/pause.mjs";
 import { recommendProcessingModes } from "./lib/recommendation.mjs";
 import { verifyLongAlignment, verifyWideAlignment } from "./lib/verify-v2.mjs";
 import {
+  computeFileSha256,
+  listWorkbookStructure,
   readWorkbookFast,
   writeCleanResultWorkbook,
 } from "./lib/workbook-fast.mjs";
-import {
-  buildOutputPath,
-} from "./run-align.mjs";
-import {
-  computeFileSha256,
-  listWorkbookStructure,
-} from "./lib/workbook-io.mjs";
 
 function pause(code, message, evidence = {}) {
   throw new PauseError(code, message, evidence);
@@ -299,6 +293,7 @@ export async function runAlignmentV2(config, runtime = {}) {
     const mappingPath = path.resolve(
       config.mappingPath ?? path.join(path.dirname(cityOrderPath), "城市名称映射表.xlsx"),
     );
+    const { readMappingRows } = await import("./lib/mapping-store.mjs");
     const existingMappings = await readMappingRows(mappingPath);
     const confirmedMappings = Array.isArray(config.confirmedMappings)
       ? config.confirmedMappings.map((item) => ({
@@ -407,6 +402,7 @@ export async function runAlignmentV2(config, runtime = {}) {
       });
     }
     const now = runtime.now ? runtime.now() : new Date();
+    const { buildOutputPath } = await import("./run-align.mjs");
     const outputPath = buildOutputPath(inputPath, outputDir, now);
     const written = await writeCleanResultWorkbook(outputModels, outputPath);
     createdOutputPath = written.outputPath;

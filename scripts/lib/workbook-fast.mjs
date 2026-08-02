@@ -2,8 +2,6 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { FileBlob, SpreadsheetFile, Workbook } from "@oai/artifact-tool";
-
 import { PauseError } from "./pause.mjs";
 import { inspectWorkbookPackage, readWorksheetTable } from "./ooxml-reader.mjs";
 
@@ -41,6 +39,31 @@ function formulaError(value, rawValue) {
 async function sha256(filePath) {
   const bytes = await fs.readFile(filePath);
   return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+export async function computeFileSha256(filePath) {
+  return sha256(path.resolve(filePath));
+}
+
+export async function listWorkbookStructure(workbookPath) {
+  const absolutePath = path.resolve(workbookPath);
+  try {
+    await fs.access(absolutePath);
+  } catch {
+    pause("SOURCE_NOT_FOUND", "工作簿不存在", { path: absolutePath });
+  }
+  const packageInfo = await inspectWorkbookPackage(absolutePath);
+  return {
+    path: absolutePath,
+    sha256: packageInfo.sha256,
+    sheets: packageInfo.sheets.map((sheet) => ({
+      name: sheet.name,
+      state: sheet.state,
+      usedRange: sheet.usedRange,
+      rowCount: sheet.rowCount,
+      columnCount: sheet.columnCount,
+    })),
+    orphanRelationships: packageInfo.orphanRelationships,
+  };
 }
 
 export async function readWorkbookFast(
@@ -97,6 +120,7 @@ export async function writeCleanResultWorkbook(outputs, outputPath) {
       path: absoluteOutputPath,
     });
   }
+  const { FileBlob, SpreadsheetFile, Workbook } = await import("@oai/artifact-tool");
 
   await fs.mkdir(path.dirname(absoluteOutputPath), { recursive: true });
   const parsed = path.parse(absoluteOutputPath);

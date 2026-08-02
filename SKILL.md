@@ -12,7 +12,8 @@ description: Use when a city-level Excel/CSV table must be aligned to 城市顺�
 - 使用 `spreadsheets:Spreadsheets` 处理独立表格文件。
 - 开始前调用 `codex_app.load_workspace_dependencies`，只使用返回的 Node.js、`@oai/artifact-tool` 和已捆绑依赖；缺少依赖时先询问用户，不擅自安装。
 - 输入预检与读取使用已捆绑 jszip 完成 OOXML 定向读取；不要求先生成修复版或规范化临时源文件。
-- artifact-tool 仅用于结果写出和复核，不用于源工作簿的完整导入。
+- `@oai/artifact-tool` 不得由估算、预检或源工作簿读取路径静态导入；仅在正式执行需要映射读取或结果写出时动态导入。
+- 加载依赖后只做一次阶段化解析预检：估算路径验证 `jszip`，正式写出前再验证 `@oai/artifact-tool`。加载器报告可用但模块无法解析时，按捆绑运行时损坏报告，不逐包安装。
 - 调用确定性运行器 [run-align-v2.mjs](scripts/run-align-v2.mjs)，不要在对话中临时重写排序逻辑。
 - 未单独取得许可，不启动 Excel、LibreOffice、PDF/PNG 渲染、浏览器预览或外部转换器。
 

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 
 import { FileBlob, SpreadsheetFile, Workbook } from "@oai/artifact-tool";
 import JSZip from "jszip";
@@ -15,6 +17,7 @@ import { addOrphanWorksheetRelationship } from "./helpers/fixture-workbooks.mjs"
 
 const tempDirectory = fileURLToPath(new URL("./tmp/v2/", import.meta.url));
 const fixedNow = new Date(2026, 6, 31, 15, 0, 0);
+const execFileAsync = promisify(execFile);
 
 async function writeWorkbook(filePath, sheets) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -72,6 +75,53 @@ test("preflight recommendation reports both modes with time and quota", async ()
   assert.match(recommendations[0].fullRow.timeEstimate, /分钟/);
   assert.match(recommendations[0].fullRow.fiveHourQuotaEstimate, /%/);
   assert.match(recommendations[0].selectedIndicators.timeEstimate, /分钟/);
+});
+
+test("preflight estimate works when the artifact writer dependency is unavailable", async () => {
+  const paths = await fixture("estimate-without-writer");
+  const loaderPath = path.join(tempDirectory, "block-artifact-loader.mjs");
+  await fs.writeFile(
+    loaderPath,
+    [
+      "export async function resolve(specifier, context, nextResolve) {",
+      "  if (specifier === \"@oai/artifact-tool\") {",
+      "    throw new Error(\"blocked writer dependency: \" + specifier);",
+      "  }",
+      "  return nextResolve(specifier, context);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  const runnerUrl = new URL("../scripts/run-align-v2.mjs", import.meta.url).href;
+  const childScript = [
+    `const { estimateAlignmentModes } = await import(${JSON.stringify(runnerUrl)});`,
+    `const result = await estimateAlignmentModes(${JSON.stringify({
+      inputPath: paths.inputPath,
+      selectedSheets: ["Data"],
+      selectedIndicatorCount: 1,
+    })});`,
+    "console.log(JSON.stringify(result));",
+  ].join("\n");
+
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [
+      "--no-warnings=ExperimentalWarning",
+      "--experimental-loader",
+      pathToFileURL(loaderPath).href,
+      "--input-type=module",
+      "--eval",
+      childScript,
+    ],
+    {
+      cwd: fileURLToPath(new URL("../", import.meta.url)),
+      maxBuffer: 1024 * 1024,
+    },
+  );
+
+  const recommendations = JSON.parse(stdout.trim());
+  assert.equal(recommendations.length, 1);
+  assert.equal(recommendations[0].sheetName, "Data");
 });
 
 test("selected-indicator mode uses all source years and appends outside cities", async () => {
