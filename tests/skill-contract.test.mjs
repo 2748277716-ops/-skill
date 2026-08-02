@@ -26,3 +26,9 @@ test("SKILL.md exposes required metadata and safety text", () => {
     assert.ok(text.includes(phrase), `Missing phrase: ${phrase}`);
   }
 });
+test("runtime helper does not hard-code a Windows user profile", () => {
+  const helperUrl = new URL("./helpers/artifact-runtime.mjs", import.meta.url);
+  const helperText = fs.readFileSync(helperUrl, "utf8");
+  const userProfilePrefix = ["C:", "Users"].join("\\");
+  assert.equal(helperText.includes(userProfilePrefix), false);
+});

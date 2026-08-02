@@ -1,14 +1,16 @@
-import fs from "node:fs";
-import path from "node:path";
+import { createRequire } from "node:module";
 
-export const bundledNodeModules = String.raw`C:\Users\86182\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules`;
+const require = createRequire(import.meta.url);
 export const inputReaderModule = "jszip";
 
-
 export function assertRuntimeAvailable() {
+  const resolvedModules = {};
   for (const name of ["@oai/artifact-tool", inputReaderModule]) {
-    const target = path.join(bundledNodeModules, ...name.split("/"));
-    if (!fs.existsSync(target)) throw new Error(`Missing bundled module: ${name}`);
+    try {
+      resolvedModules[name] = require.resolve(name);
+    } catch {
+      throw new Error("Missing bundled module: " + name);
+    }
   }
-  return bundledNodeModules;
+  return resolvedModules;
 }
