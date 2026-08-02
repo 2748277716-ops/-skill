@@ -11,6 +11,7 @@ import {
   estimateAlignmentModes,
   runAlignmentV2,
 } from "../scripts/run-align-v2.mjs";
+import { addOrphanWorksheetRelationship } from "./helpers/fixture-workbooks.mjs";
 
 const tempDirectory = fileURLToPath(new URL("./tmp/v2/", import.meta.url));
 const fixedNow = new Date(2026, 6, 31, 15, 0, 0);
@@ -58,8 +59,11 @@ async function fixture(name) {
 
 test("preflight recommendation reports both modes with time and quota", async () => {
   const paths = await fixture("estimate");
+  const orphanPath = path.join(tempDirectory, "estimate-source-orphan.xlsx");
+  await addOrphanWorksheetRelationship(paths.inputPath, orphanPath);
   const recommendations = await estimateAlignmentModes({
     ...paths,
+    inputPath: orphanPath,
     selectedSheets: ["Data"],
     selectedIndicatorCount: 1,
   });
@@ -113,4 +117,63 @@ test("clean writer creates no solid black fill and no audit worksheets", async (
   assert.equal(/patternType="solid"[\s\S]*?fgColor rgb="FF000000"/u.test(fills), false);
   const workbook = await SpreadsheetFile.importXlsx(await FileBlob.load(result.outputPath));
   assert.deepEqual(workbook.worksheets.items.map((sheet) => sheet.name), ["对齐结果"]);
+});
+
+async function projectedFixture(name) {
+  const inputPath = path.join(tempDirectory, `${name}-source.xlsx`);
+  const cityOrderPath = path.join(tempDirectory, `${name}-城市顺序.xlsx`);
+  const outputDir = path.join(tempDirectory, `${name}-output`);
+  await fs.rm(outputDir, { recursive: true, force: true });
+  await fs.mkdir(outputDir, { recursive: true });
+  await writeWorkbook(cityOrderPath, {
+    Sheet1: [
+      ["序号", "城市名"],
+      [1, "北京市"],
+      [2, "厦门市"],
+    ],
+  });
+  const extraHeaders = Array.from({ length: 36 }, (_, index) => `未选列${index + 1}`);
+  const row = (city, year, indicatorA, indicatorB, seed) => [
+    city,
+    year,
+    indicatorA,
+    indicatorB,
+    ...extraHeaders.map((_, index) => seed + index),
+  ];
+  await writeWorkbook(inputPath, {
+    Data: [
+      ["城市", "年份", "指标A", "指标B", ...extraHeaders],
+      row("北京市", 2022, 11, 21, 100),
+      row("厦门市", 2022, 12, 22, 200),
+      row("北京市", 2020, 9, 19, 300),
+      row("厦门市", 2020, 10, 20, 400),
+    ],
+  });
+  return { inputPath, cityOrderPath, outputDir };
+}
+
+test("selected mode projects requested columns before alignment", async () => {
+  const paths = await projectedFixture("projected");
+  const result = await runAlignmentV2({
+    ...paths,
+    selectedSheets: ["Data"],
+    outputMode: "selected_indicators",
+    selectedIndicators: ["指标A", "指标B"],
+  }, { now: () => fixedNow });
+
+  assert.equal(result.status, "passed");
+  assert.equal(result.audit.passed, true);
+  assert.equal(result.audit.sourceColumnCountsBySheet.Data, 4);
+
+  const workbook = await SpreadsheetFile.importXlsx(
+    await FileBlob.load(result.outputPath),
+  );
+  const values = workbook.worksheets.getItem("对齐结果").getUsedRange().values;
+  assert.deepEqual(values[0], ["城市", "年份", "指标A", "指标B"]);
+  assert.deepEqual(values.slice(1), [
+    ["北京市", 2022, 11, 21],
+    ["北京市", 2020, 9, 19],
+    ["厦门市", 2022, 12, 22],
+    ["厦门市", 2020, 10, 20],
+  ]);
 });

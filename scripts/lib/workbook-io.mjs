@@ -156,14 +156,18 @@ export async function listWorkbookStructure(workbookPath) {
   } catch {
     pause("SOURCE_NOT_FOUND", "工作簿不存在", { path: absolutePath });
   }
-  const workbook = await SpreadsheetFile.importXlsx(await FileBlob.load(absolutePath));
+  const packageInfo = await inspectWorkbookPackage(absolutePath);
   return {
     path: absolutePath,
-    sha256: await sha256(absolutePath),
-    sheets: workbook.worksheets.items.map((sheet) => ({
+    sha256: packageInfo.sha256,
+    sheets: packageInfo.sheets.map((sheet) => ({
       name: sheet.name,
-      usedRange: sheet.getUsedRange()?.address ?? null,
+      state: sheet.state,
+      usedRange: sheet.usedRange,
+      rowCount: sheet.rowCount,
+      columnCount: sheet.columnCount,
     })),
+    orphanRelationships: packageInfo.orphanRelationships,
   };
 }
 export async function readWorkbookModel(workbookPath, selectedSheets = []) {
@@ -547,4 +551,4 @@ export async function writeResultWorkbook(result, outputPath) {
       error: error?.message ?? String(error),
     });
   }
-}
+}import { inspectWorkbookPackage } from "./ooxml-reader.mjs";

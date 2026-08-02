@@ -248,18 +248,23 @@ async function selectSheets(inputPath, configuredSheets) {
 
 export async function estimateAlignmentModes(config) {
   const inputPath = requiredPath(config, "inputPath");
-  const { selectedSheets } = await selectSheets(inputPath, config.selectedSheets);
-  const sourceWorkbook = await readWorkbookFast(inputPath, selectedSheets);
-  return sourceWorkbook.sheets.map((sheet) => recommendProcessingModes({
-    rowCount: Math.max(1, sheet.matrix.length - 1),
-    columnCount: Math.max(1, sheet.matrix[0]?.length ?? 1),
-    selectedIndicatorCount: Array.isArray(config.selectedIndicators)
-      ? config.selectedIndicators.length
-      : Number(config.selectedIndicatorCount ?? 1),
-  })).map((recommendation, index) => ({
-    sheetName: sourceWorkbook.sheets[index].name,
-    ...recommendation,
-  }));
+  const { selectedSheets, structure } = await selectSheets(
+    inputPath,
+    config.selectedSheets,
+  );
+  return selectedSheets.map((sheetName) => {
+    const sheet = structure.sheets.find((item) => item.name === sheetName);
+    return {
+      sheetName,
+      ...recommendProcessingModes({
+        rowCount: Math.max(1, sheet.rowCount),
+        columnCount: Math.max(1, sheet.columnCount),
+        selectedIndicatorCount: Array.isArray(config.selectedIndicators)
+          ? config.selectedIndicators.length
+          : Number(config.selectedIndicatorCount ?? 1),
+      }),
+    };
+  });
 }
 
 export async function runAlignmentV2(config, runtime = {}) {
@@ -306,7 +311,20 @@ export async function runAlignmentV2(config, runtime = {}) {
       baseCityContext,
     );
 
-    const sourceWorkbook = await readWorkbookFast(inputPath, selectedSheets);
+    const sourceReadOptions = outputMode === "selected_indicators"
+      ? {
+          projectHeaders: ["城市", "年份", ...(config.selectedIndicators ?? [])],
+          projectionRoles: {
+            cityHeaders: ["城市", "城市名", "城市名称", "地级市", "city", "cityname"],
+            yearHeaders: ["年份", "年度", "统计年份", "year"],
+          },
+        }
+      : {};
+    const sourceWorkbook = await readWorkbookFast(
+      inputPath,
+      selectedSheets,
+      sourceReadOptions,
+    );
     const sourceModels = [];
     const outputModels = [];
     const verifications = [];
@@ -422,6 +440,10 @@ export async function runAlignmentV2(config, runtime = {}) {
       additionalOutputFiles: [],
       audit: {
         passed: true,
+        sourceColumnCountsBySheet: Object.fromEntries(
+          sourceWorkbook.sheets.map((sheet) =>
+            [sheet.name, sheet.projectedColumnCount ?? sheet.matrix[0]?.length ?? 0]),
+        ),
         verifications,
         inputSha256: sourceWorkbook.sha256,
         inputSha256After: inputHashAfter,

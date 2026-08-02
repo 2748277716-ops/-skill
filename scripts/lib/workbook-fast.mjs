@@ -5,6 +5,7 @@ import path from "node:path";
 import { FileBlob, SpreadsheetFile, Workbook } from "@oai/artifact-tool";
 
 import { PauseError } from "./pause.mjs";
+import { inspectWorkbookPackage, readWorksheetTable } from "./ooxml-reader.mjs";
 
 function pause(code, message, evidence = {}) {
   throw new PauseError(code, message, evidence);
@@ -42,11 +43,14 @@ async function sha256(filePath) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-export async function readWorkbookFast(workbookPath, selectedSheets = []) {
+export async function readWorkbookFast(
+  workbookPath,
+  selectedSheets = [],
+  options = {},
+) {
   const absolutePath = path.resolve(workbookPath);
-  const inputSha256 = await sha256(absolutePath);
-  const workbook = await SpreadsheetFile.importXlsx(await FileBlob.load(absolutePath));
-  const sheetNames = workbook.worksheets.items.map((sheet) => sheet.name);
+  const packageInfo = await inspectWorkbookPackage(absolutePath);
+  const sheetNames = packageInfo.sheets.map((sheet) => sheet.name);
   const selected = selectedSheets.length ? selectedSheets : sheetNames;
   const unknownSheets = selected.filter((name) => !sheetNames.includes(name));
   if (unknownSheets.length) {
@@ -60,106 +64,24 @@ export async function readWorkbookFast(workbookPath, selectedSheets = []) {
   const sheets = [];
   const formulaEvents = [];
   for (const sheetName of selected) {
-    const sheet = workbook.worksheets.getItem(sheetName);
-    const usedRange = sheet.getUsedRange();
-    if (!usedRange) {
-      sheets.push({
-        name: sheetName,
-        matrix: [],
-        rowRecords: [],
-        headerMetadata: [],
-        unsafeMerges: [],
-        dataStartRow: 0,
-        dataStartColumn: 0,
-      });
-      continue;
-    }
-    const dataRange = usedRange.getCell(0, 0).getCurrentRegion();
-    const values = dataRange.values;
-    const formulas = dataRange.formulas;
-    const rawValues = dataRange.rawValues;
-    const mergedRanges = typeof sheet.__getMergedCells === "function"
-      ? sheet.__getMergedCells().map((merge) => `${merge.startAddress}:${merge.endAddress}`)
-      : [];
-    if (mergedRanges.length) {
-      pause("UNSAFE_MERGED_CELLS", "数据区域存在合并单元格，快速模式不能安全处理", {
-        sheetName,
-        dataRange: dataRange.address,
-        mergedRanges,
-      });
-    }
-
-    const metadataMatrix = values.map((row, rowOffset) => row.map((_, columnOffset) => {
-      const absoluteRow = dataRange.rowIndex + rowOffset;
-      const absoluteColumn = dataRange.columnIndex + columnOffset;
-      const formula = formulas[rowOffset]?.[columnOffset] || null;
-      const value = values[rowOffset]?.[columnOffset] ?? null;
-      const rawValue = rawValues[rowOffset]?.[columnOffset] ?? null;
-      const address = cellAddress(absoluteRow, absoluteColumn);
-      if (formula && formulaError(value, rawValue)) {
-        pause("FORMULA_ERROR", "公式单元格包含错误值", {
-          sheetName,
-          cell: address,
-          formula,
-          value,
-        });
-      }
-      if (formula && (value === null || value === undefined)) {
-        pause("FORMULA_VALUE_UNAVAILABLE", "公式缺少可用的当前计算值", {
-          sheetName,
-          cell: address,
-          formula,
-        });
-      }
-      if (formula) {
-        formulaEvents.push({
-          sheetName,
-          cell: address,
-          sourceRow: absoluteRow + 1,
-          sourceColumn: absoluteColumn,
-          formula,
-          currentValue: value,
-        });
-      }
-      return {
-        address,
-        sourceRow: absoluteRow + 1,
-        sourceColumn: absoluteColumn,
-        formula,
-      };
-    }));
-
-    const rowRecords = values.slice(1).map((rowValues, index) => ({
-      values: [...rowValues],
-      sourceRow: dataRange.rowIndex + index + 2,
-      cellMetadata: metadataMatrix[index + 1].map((item) => ({ ...item })),
-      sourceCells: metadataMatrix[index + 1].map((item) => item.address),
-    }));
-    const sheetSha256 = crypto
-      .createHash("sha256")
-      .update(JSON.stringify({ values, formulas }))
-      .digest("hex");
-    sheets.push({
-      name: sheetName,
-      usedRange: usedRange.address,
-      dataRange: dataRange.address,
-      dataStartRow: dataRange.rowIndex,
-      dataStartColumn: dataRange.columnIndex,
-      matrix: values,
-      formulas,
-      rowRecords,
-      headerMetadata: metadataMatrix[0]?.map((item) => ({ ...item })) ?? [],
-      mergedRanges,
-      unsafeMerges: [],
-      sheetSha256,
-    });
+    const sheet = await readWorksheetTable(absolutePath, sheetName, options);
+    sheets.push(sheet);
+    formulaEvents.push(...sheet.formulaEvents);
   }
 
   return {
     path: absolutePath,
-    sha256: inputSha256,
+    sha256: packageInfo.sha256,
     sheetNames,
     selectedSheets: selected,
+    summaries: packageInfo.sheets.map((sheet) => ({
+      name: sheet.name,
+      state: sheet.state,
+      usedRange: sheet.usedRange,
+      rowCount: sheet.rowCount,
+      columnCount: sheet.columnCount,
+    })),
+    orphanRelationships: packageInfo.orphanRelationships,
     sheets,
     formulaEvents,
   };

@@ -473,14 +473,14 @@ function selectProjectedColumns(headerCells, options) {
     value: cell.value,
     normalized: normalizedHeader(cell.value),
   }));
-  if (!options.projectHeaders?.length) {
+  if (!options.projectHeaders?.length && !options.projectionRoles) {
     if (!headerEntries.length) return [];
     const start = Math.min(...headerEntries.map((entry) => entry.column));
     const end = Math.max(...headerEntries.map((entry) => entry.column));
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }
 
-  return options.projectHeaders.map((requestedHeader) => {
+  function uniqueExactHeader(requestedHeader) {
     const normalized = normalizedHeader(requestedHeader);
     const matches = headerEntries.filter((entry) => entry.normalized === normalized);
     if (!matches.length) {
@@ -496,7 +496,55 @@ function selectProjectedColumns(headerCells, options) {
       });
     }
     return matches[0].column;
-  });
+  }
+
+  if (!options.projectionRoles) {
+    return options.projectHeaders.map(uniqueExactHeader);
+  }
+
+  function uniqueRole(role, aliases, missingCode, ambiguousCode) {
+    const normalizedAliases = new Set(aliases.map(normalizedHeader));
+    const matches = headerEntries.filter((entry) =>
+      normalizedAliases.has(entry.normalized),
+    );
+    if (!matches.length) {
+      throw new PauseError(missingCode, "未找到必需的键列。", {
+        role,
+        aliases,
+        availableHeaders: headerEntries.map((entry) => entry.value),
+      });
+    }
+    if (matches.length > 1) {
+      throw new PauseError(ambiguousCode, "必需键列不能唯一识别。", {
+        role,
+        aliases,
+        columns: matches.map((entry) => columnLabel(entry.column)),
+      });
+    }
+    return matches[0];
+  }
+
+  const cityAliases = options.projectionRoles.cityHeaders ?? [];
+  const yearAliases = options.projectionRoles.yearHeaders ?? [];
+  const city = uniqueRole(
+    "city",
+    cityAliases,
+    "AMBIGUOUS_CITY_COLUMN",
+    "AMBIGUOUS_CITY_COLUMN",
+  );
+  const year = uniqueRole(
+    "year",
+    yearAliases,
+    "AMBIGUOUS_YEAR_COLUMN",
+    "AMBIGUOUS_YEAR_COLUMN",
+  );
+  const roleAliases = new Set(
+    [...cityAliases, ...yearAliases].map(normalizedHeader),
+  );
+  const indicators = (options.projectHeaders ?? [])
+    .filter((header) => !roleAliases.has(normalizedHeader(header)))
+    .map(uniqueExactHeader);
+  return [city.column, year.column, ...indicators];
 }
 
 function mergeIntersectsColumns(reference, startRow, endRow, columns) {
